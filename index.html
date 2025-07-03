@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SUPER TEXTILE AGENCIES - Shipment Tracking</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f7fc;
+      margin: 0;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      color: #1a237e;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .form-box {
+      background: #fff;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      max-width: 1000px;
+      margin: auto;
+    }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .form-group {
+      flex: 1 1 22%;
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    input, select {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 15px;
+      background: #1a237e;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #303f9f;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: #1a237e;
+      color: white;
+    }
+    .action-btn {
+      cursor: pointer;
+      color: blue;
+      text-decoration: underline;
+    }
+    .filters {
+      margin: 20px auto;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+
+<h2>SUPER TEXTILE AGENCIES SHIPMENT TRACKING FORM</h2>
+
+<div class="form-box">
+  <div class="form-row">
+    <div class="form-group"><label>Factory</label><input id="factory" /></div>
+    <div class="form-group"><label>Buyer</label><input id="buyer" /></div>
+    <div class="form-group"><label>PO #</label><input id="po" /></div>
+    <div class="form-group"><label>Shipment Date</label><input type="date" id="date" /></div>
+    <div class="form-group"><label>Article</label><input id="article" /></div>
+    <div class="form-group"><label>Cont/Truck #</label><input id="container" /></div>
+    <div class="form-group"><label>Req Pc</label><input type="number" id="reqPc" /></div>
+    <div class="form-group"><label>Req Ctn</label><input type="number" id="reqCtn" /></div>
+    <div class="form-group"><label>Unit Pc/Pack</label><input id="unit" /></div>
+    <div class="form-group"><label>Ship Pc</label><input type="number" id="shipPc" /></div>
+    <div class="form-group"><label>Ship Ctn</label><input type="number" id="shipCtn" /></div>
+    <div class="form-group"><label>Bal Pc</label><input id="balPc" readonly /></div>
+    <div class="form-group"><label>Bal Ctn</label><input id="balCtn" readonly /></div>
+    <div class="form-group"><label>Mode</label><input id="mode" /></div>
+    <div class="form-group"><label>Remarks</label><input id="remarks" /></div>
+  </div>
+  <button onclick="saveEntry()">Save Shipment</button>
+  <button onclick="downloadExcel()">Open Excel Backup</button>
+</div>
+
+<div class="filters">
+  <div>
+    <label>Search by PO:</label>
+    <input id="searchPO" oninput="filterTable()" />
+  </div>
+  <div>
+    <label>Search by Factory:</label>
+    <input id="searchFactory" oninput="filterTable()" />
+  </div>
+</div>
+
+<table id="dataTable">
+  <thead>
+    <tr>
+      <th>Factory</th><th>Buyer</th><th>PO #</th><th>Shipment Date</th><th>Article</th>
+      <th>Cont/Truck #</th><th>Req Pc</th><th>Req Ctn</th><th>Unit</th><th>Ship Pc</th>
+      <th>Ship Ctn</th><th>Bal Pc</th><th>Bal Ctn</th><th>Mode</th><th>Remarks</th><th>Action</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  let entries = JSON.parse(localStorage.getItem("shipments") || "[]");
+  let editIndex = -1;
+
+  function renderTable() {
+    const tbody = document.querySelector("#dataTable tbody");
+    tbody.innerHTML = "";
+    entries.forEach((e, i) => {
+      let row = `<tr>
+        <td>${e.factory}</td><td>${e.buyer}</td><td>${e.po}</td><td>${e.date}</td><td>${e.article}</td>
+        <td>${e.container}</td><td>${e.reqPc}</td><td>${e.reqCtn}</td><td>${e.unit}</td><td>${e.shipPc}</td>
+        <td>${e.shipCtn}</td><td>${e.balPc}</td><td>${e.balCtn}</td><td>${e.mode}</td><td>${e.remarks}</td>
+        <td>
+          <span class="action-btn" onclick="editEntry(${i})">Edit</span> |
+          <span class="action-btn" onclick="deleteEntry(${i})">Delete</span>
+        </td>
+      </tr>`;
+      tbody.innerHTML += row;
+    });
+  }
+
+  function saveEntry() {
+    const data = {
+      factory: get("factory"), buyer: get("buyer"), po: get("po"), date: get("date"),
+      article: get("article"), container: get("container"), reqPc: +get("reqPc"),
+      reqCtn: +get("reqCtn"), unit: get("unit"), shipPc: +get("shipPc"),
+      shipCtn: +get("shipCtn"), balPc: +get("reqPc") - +get("shipPc"),
+      balCtn: +get("reqCtn") - +get("shipCtn"), mode: get("mode"), remarks: get("remarks")
+    };
+
+    if (editIndex === -1) {
+      entries.push(data);
+    } else {
+      entries[editIndex] = data;
+      editIndex = -1;
+    }
+
+    localStorage.setItem("shipments", JSON.stringify(entries));
+    renderTable();
+    generateExcel(entries);
+    clearForm();
+  }
+
+  function editEntry(index) {
+    const e = entries[index];
+    set("factory", e.factory); set("buyer", e.buyer); set("po", e.po); set("date", e.date);
+    set("article", e.article); set("container", e.container); set("reqPc", e.reqPc);
+    set("reqCtn", e.reqCtn); set("unit", e.unit); set("shipPc", e.shipPc);
+    set("shipCtn", e.shipCtn); set("balPc", e.balPc); set("balCtn", e.balCtn);
+    set("mode", e.mode); set("remarks", e.remarks);
+    editIndex = index;
+  }
+
+  function deleteEntry(index) {
+    if (confirm("Are you sure to delete?")) {
+      entries.splice(index, 1);
+      localStorage.setItem("shipments", JSON.stringify(entries));
+      renderTable();
+      generateExcel(entries);
+    }
+  }
+
+  function clearForm() {
+    document.querySelectorAll("input").forEach(input => input.value = "");
+  }
+
+  function get(id) { return document.getElementById(id).value; }
+  function set(id, val) { document.getElementById(id).value = val; }
+
+  function generateExcel(data) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, "Shipment Data");
+    XLSX.writeFile(wb, "Shipment_Tracking_Backup.xlsx");
+  }
+
+  function downloadExcel() {
+    generateExcel(entries);
+  }
+
+  function filterTable() {
+    const po = document.getElementById("searchPO").value.toLowerCase();
+    const factory = document.getElementById("searchFactory").value.toLowerCase();
+    const filtered = entries.filter(e => 
+      e.po.toLowerCase().includes(po) &&
+      e.factory.toLowerCase().includes(factory)
+    );
+    const tbody = document.querySelector("#dataTable tbody");
+    tbody.innerHTML = "";
+    filtered.forEach((e, i) => {
+      tbody.innerHTML += `<tr>
+        <td>${e.factory}</td><td>${e.buyer}</td><td>${e.po}</td><td>${e.date}</td><td>${e.article}</td>
+        <td>${e.container}</td><td>${e.reqPc}</td><td>${e.reqCtn}</td><td>${e.unit}</td><td>${e.shipPc}</td>
+        <td>${e.shipCtn}</td><td>${e.balPc}</td><td>${e.balCtn}</td><td>${e.mode}</td><td>${e.remarks}</td>
+        <td>
+          <span class="action-btn" onclick="editEntry(${i})">Edit</span> |
+          <span class="action-btn" onclick="deleteEntry(${i})">Delete</span>
+        </td>
+      </tr>`;
+    });
+  }
+
+  renderTable();
+</script>
+
+</body>
+</html>
