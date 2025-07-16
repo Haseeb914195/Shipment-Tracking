@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shipment Tracking | Super Textile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f9ff; margin: 0; padding: 20px; }
+    h1 { text-align: center; color: #003366; }
+    .container { max-width: 1400px; margin: auto; }
+    .card { background: #fff; padding: 25px; margin-top: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    label { font-weight: bold; color: #003366; margin-bottom: 5px; display: block; }
+    input, textarea { width: 100%; padding: 8px; font-size: 14px; border-radius: 6px; border: 1px solid #ccc; }
+    button { padding: 10px 20px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+    .btn-primary { background-color: #003366; color: white; }
+    .btn-secondary { background-color: #ddd; color: black; }
+    .logout-btn { float: right; background: #c62828; color: white; padding: 8px 16px; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px; border: 1px solid #ccc; text-align: center; font-size: 14px; }
+    th { background: #003366; color: white; }
+    .action-btn { padding: 6px 10px; font-size: 12px; margin: 2px; border-radius: 4px; }
+    .edit-btn { background-color: #2e7d32; color: white; }
+    .delete-btn { background-color: #d32f2f; color: white; }
+    #mainForm { display: none; }
+    #searchBar { padding: 8px; width: 250px; }
+  </style>
+</head>
+<body>
+
+<!-- Login Section -->
+<div id="loginSection" class="card" style="max-width:400px;margin:auto;margin-top:100px;text-align:center;">
+  <h2>Login</h2>
+  <input type="text" id="username" placeholder="Username"><br><br>
+  <input type="password" id="password" placeholder="Password"><br><br>
+  <button class="btn-primary" onclick="checkLogin()">Login</button>
+  <p id="errorMsg" style="color:red;"></p>
+</div>
+
+<!-- Main Form Section -->
+<div id="mainForm" class="container">
+  <button class="logout-btn" onclick="logout()">Logout</button>
+  <h1>SUPER TEXTILE AGENCIES SHIPMENT TRACKING FORM</h1>
+
+  <div class="card">
+    <form id="shipmentForm">
+      <div class="form-grid">
+        <div><label>Factory</label><input type="text" name="factory" required /></div>
+        <div><label>Buyer</label><input type="text" name="buyer" required /></div>
+        <div><label>PO Number</label><input type="text" name="poNumber" required /></div>
+        <div><label>Shipment Date</label><input type="date" name="shipmentDate" required /></div>
+        <div><label>Article</label><input type="text" name="article" required /></div>
+        <div><label>Container/Truck No</label><input type="text" name="container" /></div>
+        <div><label>Required Pcs</label><input type="number" name="reqPcs" oninput="autoBalance()" /></div>
+        <div><label>Required Ctn</label><input type="number" name="reqCtn" oninput="autoBalance()" /></div>
+        <div><label>Unit Pc/Pack</label><input type="text" name="unit" /></div>
+        <div><label>Shipped Pcs</label><input type="number" name="shipPcs" oninput="autoBalance()" /></div>
+        <div><label>Shipped Ctn</label><input type="number" name="shipCtn" oninput="autoBalance(); calculateCBM()" /></div>
+        <div><label>Balance Pcs</label><input type="number" name="balPcs" readonly /></div>
+        <div><label>Balance Ctn</label><input type="number" name="balCtn" readonly /></div>
+        <div><label>Mode</label><input type="text" name="mode" /></div>
+        <div><label>Remarks</label><textarea name="remarks" rows="2"></textarea></div>
+      </div>
+
+      <hr style="margin: 30px 0;">
+      <h3 style="color:#003366;">Carton Dimensions & CBM</h3>
+      <div class="form-grid">
+        <div><label>Length (cm)</label><input type="number" id="length" oninput="calculateCBM()" /></div>
+        <div><label>Width (cm)</label><input type="number" id="width" oninput="calculateCBM()" /></div>
+        <div><label>Height (cm)</label><input type="number" id="height" oninput="calculateCBM()" /></div>
+        <div><label>Total CBM</label><input type="text" id="totalCbm" readonly style="background:#eee;font-weight:bold;" /></div>
+      </div>
+
+      <br>
+      <div style="text-align:center;">
+        <button type="submit" class="btn-primary">Save Shipment</button>
+        <button type="button" class="btn-secondary" onclick="downloadExcel()">Open Excel Backup</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Search by PO Number:</h3>
+    <input type="text" id="searchBar" placeholder="Search PO Number..." oninput="renderTable(true)" />
+    <table id="entryTable">
+      <thead>
+        <tr>
+          <th>Factory</th><th>Buyer</th><th>PO #</th><th>Date</th><th>Article</th><th>Container</th>
+          <th>Req Pcs</th><th>Req Ctn</th><th>Unit</th><th>Ship Pcs</th><th>Ship Ctn</th>
+          <th>Bal Pcs</th><th>Bal Ctn</th><th>Mode</th><th>Remarks</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let entries = [];
+let editingIndex = -1;
+
+function checkLogin() {
+  const u = document.getElementById("username").value.trim();
+  const p = document.getElementById("password").value.trim();
+  if (u === "admin" && p === "1234") {
+    document.getElementById("loginSection").style.display = "none";
+    document.getElementById("mainForm").style.display = "block";
+  } else {
+    document.getElementById("errorMsg").textContent = "Invalid username or password.";
+  }
+}
+
+function logout() {
+  document.getElementById("mainForm").style.display = "none";
+  document.getElementById("loginSection").style.display = "block";
+}
+
+function autoBalance() {
+  const reqPcs = parseFloat(document.querySelector('[name="reqPcs"]').value) || 0;
+  const reqCtn = parseFloat(document.querySelector('[name="reqCtn"]').value) || 0;
+  const shipPcs = parseFloat(document.querySelector('[name="shipPcs"]').value) || 0;
+  const shipCtn = parseFloat(document.querySelector('[name="shipCtn"]').value) || 0;
+  document.querySelector('[name="balPcs"]').value = reqPcs - shipPcs;
+  document.querySelector('[name="balCtn"]').value = reqCtn - shipCtn;
+}
+
+function calculateCBM() {
+  const l = parseFloat(document.getElementById("length").value) || 0;
+  const w = parseFloat(document.getElementById("width").value) || 0;
+  const h = parseFloat(document.getElementById("height").value) || 0;
+  const ctn = parseFloat(document.querySelector('[name="shipCtn"]').value) || 0;
+  const cbm = (l * w * h / 1000000) * ctn;
+  document.getElementById("totalCbm").value = cbm.toFixed(2);
+}
+
+document.getElementById("shipmentForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+  const data = new FormData(e.target);
+  const row = Array.from(data.values());
+  row.push(
+    document.getElementById("length").value,
+    document.getElementById("width").value,
+    document.getElementById("height").value,
+    document.getElementById("totalCbm").value
+  );
+
+  const exists = entries.some(e => JSON.stringify(e) === JSON.stringify(row));
+  if (editingIndex >= 0) {
+    entries[editingIndex] = row;
+    editingIndex = -1;
+  } else if (!exists) {
+    entries.push(row);
+  }
+
+  e.target.reset();
+  document.getElementById("length").value = "";
+  document.getElementById("width").value = "";
+  document.getElementById("height").value = "";
+  document.getElementById("totalCbm").value = "";
+  renderTable();
+});
+
+function renderTable(filtering = false) {
+  const body = document.querySelector("#entryTable tbody");
+  const filter = document.getElementById("searchBar").value.toLowerCase();
+  body.innerHTML = "";
+  let lastEntry = null;
+
+  entries.forEach((entry, index) => {
+    if (!filter || entry[2].toLowerCase().includes(filter)) {
+      const tr = document.createElement("tr");
+      entry.slice(0, 15).forEach(text => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      const td = document.createElement("td");
+      td.innerHTML = `<button class="action-btn edit-btn" onclick="editEntry(${index})">Edit</button>
+                      <button class="action-btn delete-btn" onclick="deleteEntry(${index})">Delete</button>`;
+      tr.appendChild(td);
+      body.appendChild(tr);
+      lastEntry = entry;
+    }
+  });
+
+  if (filtering && lastEntry) {
+    const inputs = document.querySelectorAll("#shipmentForm input, #shipmentForm textarea");
+    inputs.forEach((input, i) => {
+      if (lastEntry[i] !== undefined && input.name) input.value = lastEntry[i];
+    });
+    document.getElementById("length").value = lastEntry[15] || "";
+    document.getElementById("width").value = lastEntry[16] || "";
+    document.getElementById("height").value = lastEntry[17] || "";
+    document.getElementById("totalCbm").value = lastEntry[18] || "";
+    autoBalance();
+  }
+}
+
+function editEntry(index) {
+  const formInputs = document.querySelectorAll("#shipmentForm input, #shipmentForm textarea");
+  const entry = entries[index];
+  formInputs.forEach((input, i) => {
+    if (entry[i] !== undefined && input.name) input.value = entry[i];
+  });
+  document.getElementById("length").value = entry[15] || "";
+  document.getElementById("width").value = entry[16] || "";
+  document.getElementById("height").value = entry[17] || "";
+  document.getElementById("totalCbm").value = entry[18] || "";
+  editingIndex = index;
+  autoBalance();
+  calculateCBM();
+}
+
+function deleteEntry(index) {
+  if (confirm("Are you sure you want to delete this entry?")) {
+    entries.splice(index, 1);
+    renderTable();
+  }
+}
+
+function downloadExcel() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["Factory", "Buyer", "PO #", "Date", "Article", "Container", "Req Pcs", "Req Ctn", "Unit", "Ship Pcs", "Ship Ctn", "Bal Pcs", "Bal Ctn", "Mode", "Remarks"],
+    ...entries.map(e => e.slice(0, 15))
+  ]);
+  XLSX.utils.book_append_sheet(wb, ws, "Shipments");
+  XLSX.writeFile(wb, "Shipment_Tracking_Backup.xlsx");
+}
+</script>
+</body>
+</html>
